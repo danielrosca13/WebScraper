@@ -1,0 +1,110 @@
+package md.aichat.scraper
+
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import kotlinx.coroutines.*
+import java.io.FileWriter
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import java.net.URL
+
+class WebScraper(private val config: ScraperConfig) {
+    init {
+        if (config.maxVisitedLinks != null && config.maxVisitedLinks < 0) {
+            throw IllegalArgumentException("maxVisitedLinks cannot be negative")
+        }
+    }
+
+    private val visitedUrls = ConcurrentHashMap.newKeySet<String>()
+    private val allTextData = ConcurrentHashMap.newKeySet<String>()
+
+    suspend fun scrape() = coroutineScope {
+        crawl(this, config.baseUrl, 0)
+    }
+
+    private fun crawl(scope: CoroutineScope, url: String, depth: Int) {
+        if (!shouldVisit(url, depth)) return
+        println("Crawling: $url (depth $depth)")
+        fetchAndProcess(scope, url, depth)
+    }
+
+    private fun shouldVisit(url: String, depth: Int): Boolean {
+        if (config.maxVisitedLinks != null && config.maxVisitedLinks > 0 && visitedUrls.size >= config.maxVisitedLinks) return false
+        if (!visitedUrls.add(url)) return false
+        if (config.maxDepth != null && depth > config.maxDepth) return false
+        return true
+    }
+
+    private fun fetchAndProcess(scope: CoroutineScope, url: String, depth: Int) {
+        val maxRetries = 3
+        val retryDelayMillis = 5_000L
+        var attempt = 0
+        while (true) {
+            try {
+                val document = Jsoup.connect(url).timeout(100_000).get()
+                processDocument(document)
+                launchLinks(scope, document, depth)
+                break
+            } catch (e: IOException) {
+                attempt++
+                if (shouldRetry(e) && attempt < maxRetries) {
+                    System.err.println("Error crawling $url: ${e.message}. Retrying ($attempt/$maxRetries)...")
+                    Thread.sleep(retryDelayMillis)
+                } else {
+                    System.err.println("Error crawling $url: ${e.message}. Giving up after $attempt attempts.")
+                    break
+                }
+            }
+        }
+    }
+
+    private fun shouldRetry(e: IOException): Boolean {
+        val msg = e.message ?: return false
+        return config.shouldUseRetry && (msg.contains("500") || msg.contains("502") || msg.contains("timed out"))
+    }
+
+    private fun processDocument(document: Document) {
+        allTextData.add(DataExtractor.extractAllText(document))
+    }
+
+    private fun launchLinks(scope: CoroutineScope, document: Document, depth: Int) {
+        val links = document.select("a[href]")
+        val baseUrlObj = URL(config.baseUrl)
+        val baseProtocolHost = "${'$'}{baseUrlObj.protocol}://${'$'}{baseUrlObj.host}"
+        for (link in links) {
+            val absLink = link.absUrl("href")
+            if (absLink.isEmpty() || !isValidResource(absLink)) continue
+            if (shouldFollowLink(absLink)) {
+                scope.launch(Dispatchers.IO) {
+                    crawl(this, absLink, depth + 1)
+                }
+            }
+        }
+    }
+
+    private fun shouldFollowLink(absLink: String): Boolean {
+        val matchesProductPattern = config.productUrlPattern != null && absLink.contains(config.productUrlPattern)
+        val isSameDomain = absLink.startsWith(config.baseUrl) || (try { URL(absLink).host == URL(config.baseUrl).host } catch (e: Exception) { false })
+        return when {
+            config.crawlWholeSite -> isSameDomain
+            config.isPageWithProducts -> absLink.startsWith(config.baseUrl) || matchesProductPattern
+            else -> absLink.startsWith(config.baseUrl)
+        }
+    }
+
+    private fun isValidResource(url: String): Boolean {
+        val lower = url.lowercase()
+        return !(lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".mp3") || lower.endsWith(".mp4"))
+    }
+
+    fun saveResults(allInfoPath: String) {
+        try {
+            FileWriter(allInfoPath).use { writer ->
+                allTextData.forEach { writer.write(it + "\n\n") }
+            }
+            println("All text data saved to $allInfoPath")
+        } catch (e: IOException) {
+            System.err.println("Error saving results: ${e.message}")
+        }
+    }
+}
