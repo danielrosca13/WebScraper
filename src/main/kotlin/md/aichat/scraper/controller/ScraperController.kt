@@ -18,6 +18,7 @@ class ScraperController(
     @PostMapping("/start/whole-site")
     fun startWholeSiteScrape(
         @RequestParam baseUrl: String,
+        @RequestParam(required = false, defaultValue = "false") shouldRetry: Boolean = false,
         @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false,
         @RequestParam(required = false) maxVisitedLinks: Int?,
         @RequestParam(required = false) maxDepth: Int?
@@ -25,6 +26,7 @@ class ScraperController(
         val config = ScraperConfig(
             baseUrl = baseUrl,
             crawlWholeSite = true,
+            shouldUseRetry = shouldRetry,
             maxVisitedLinks = maxVisitedLinks,
             maxDepth = maxDepth
         )
