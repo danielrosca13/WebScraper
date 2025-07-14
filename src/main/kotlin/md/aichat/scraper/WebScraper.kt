@@ -68,7 +68,7 @@ class WebScraper(
 
     private fun shouldRetry(e: IOException): Boolean {
         val msg = e.message ?: return false
-        return config.shouldUseRetry && (msg.contains("500") || msg.contains("502") || msg.contains("timed out"))
+        return config.shouldUseRetry && (msg.contains("500") || msg.contains("502") || msg.contains("508") || msg.contains("timed out"))
     }
 
     private fun processDocument(document: Document) {
@@ -107,6 +107,12 @@ class WebScraper(
 
     fun saveResults(allInfoPath: String) {
         try {
+            val file = java.io.File(allInfoPath)
+            file.parentFile?.let { parent ->
+                if (!parent.exists()) {
+                    parent.mkdirs()
+                }
+            }
             FileWriter(allInfoPath).use { writer ->
                 allTextData.forEach { writer.write(it + "\n\n") }
             }
