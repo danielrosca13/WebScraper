@@ -1,95 +1,89 @@
 package md.aichat.scraper.service
 
-import com.microsoft.playwright.Page
-import com.microsoft.playwright.Playwright
-import md.aichat.scraper.dto.Job
-import md.aichat.scraper.dto.JobStatus
-import md.aichat.scraper.dto.ScrapedPage
-import md.aichat.scraper.repository.JobRepository
-import de.l3s.boilerpipe.extractors.ArticleExtractor
-import org.springframework.scheduling.annotation.Async
-import org.springframework.stereotype.Service
-import java.net.URI
-import java.util.LinkedList
-import java.util.Queue
+import kotlinx.coroutines.*
+import md.aichat.scraper.WebScraper
+import md.aichat.scraper.ScraperConfig
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.UUID
 
-@Service
-class ScrapingService(private val jobRepository: JobRepository) {
+class ScrapingService {
+    data class ScrapeJob(
+        val id: String,
+        val config: ScraperConfig,
+        val isReturningText: Boolean,
+        val logLines: MutableList<String> = mutableListOf(),
+        val isRunning: AtomicBoolean = AtomicBoolean(true),
+        var resultPath: String? = null,
+        var resultText: String? = null,
+        var job: Job? = null,
+        var scraper: WebScraper? = null
+    )
 
-    @Async
-    fun startScraping(job: Job, maxPages: Int) {
-        try {
-            job.status = JobStatus.SCRAPING
-            jobRepository.save(job)
+    private val jobs = ConcurrentHashMap<String, ScrapeJob>()
 
-            val results = crawlSite(job.url, maxPages)
-
-            job.result = results
-            job.status = JobStatus.COMPLETED
-            jobRepository.save(job)
-
-        } catch (e: Exception) {
-            println("Scraping failed for job ${job.id}: ${e.message}")
-            job.status = JobStatus.FAILED
-            job.error = e.message
-            jobRepository.save(job)
-        }
-    }
-
-    private fun crawlSite(startUrl: String, maxPages: Int): List<ScrapedPage> {
-        val scrapedPages = mutableListOf<ScrapedPage>()
-        val urlsToVisit: Queue<String> = LinkedList()
-        val visitedUrls = mutableSetOf<String>()
-        val allowedDomain = URI(startUrl).host
-
-        urlsToVisit.add(startUrl)
-        visitedUrls.add(startUrl)
-
-        Playwright.create().use { playwright ->
-            val browser = playwright.chromium().launch() // You can also use .firefox() or .webkit()
-            browser.use {
-                while (urlsToVisit.isNotEmpty() && scrapedPages.size < maxPages) {
-                    val currentUrl = urlsToVisit.poll()
-                    println("Scraping: $currentUrl")
-
-                    val page = it.newPage()
-                    try {
-                        page.navigate(currentUrl, Page.NavigateOptions().apply {
-                            setWaitUntil(com.microsoft.playwright.options.WaitUntilState.DOMCONTENTLOADED)
-                        })
-
-                        // 1. Extract clean text content using Boilerpipe
-                        val html = page.content()
-                        val textContent = ArticleExtractor.INSTANCE.getText(html)
-                        if (textContent.isNotBlank()) {
-                            scrapedPages.add(ScrapedPage(url = currentUrl, textContent = textContent))
-                        }
-
-                        // 2. Find all new links to crawl
-                        val links = page.locator("a[href]").all()
-                            .mapNotNull { it.getAttribute("href") }
-                            .map { toAbsoluteUrl(currentUrl, it) }
-                            .filter { it.host == allowedDomain && !visitedUrls.contains(it.toString()) }
-
-                        links.forEach { link ->
-                            val linkStr = link.toString()
-                            if (!visitedUrls.contains(linkStr)) {
-                                visitedUrls.add(linkStr)
-                                urlsToVisit.add(linkStr)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        println("Could not process page $currentUrl: ${e.message}")
-                    } finally {
-                        page.close()
-                    }
+    fun startScrape(config: ScraperConfig, isReturningText: Boolean): String {
+        val id = UUID.randomUUID().toString()
+        val job = ScrapeJob(id, config, isReturningText)
+        jobs[id] = job
+        job.job = CoroutineScope(Dispatchers.IO).launch {
+            val scraper = WebScraper(config)
+            job.scraper = scraper
+            val logBuffer = job.logLines
+            val logInterceptor = { line: String ->
+                synchronized(logBuffer) {
+                    logBuffer.add(line)
+                    if (logBuffer.size > 100) logBuffer.removeAt(0)
                 }
             }
+            val originalOut = System.out
+            try {
+                // Redirect println to logInterceptor for this job
+                System.setOut(java.io.PrintStream(object : java.io.OutputStream() {
+                    override fun write(b: Int) { }
+                    override fun write(b: ByteArray, off: Int, len: Int) {
+                        val str = String(b, off, len)
+                        logInterceptor(str.trim())
+                    }
+                }))
+                scraper.scrape()
+                val resultPath = "scrape_result_${id}.txt"
+                scraper.saveResults(resultPath)
+                job.resultPath = resultPath
+                if (isReturningText) {
+                    job.resultText = scraper.getAllText()
+                }
+            } catch (e: Exception) {
+                logInterceptor("Error: ${e.message}")
+            } finally {
+                job.isRunning.set(false)
+                System.setOut(originalOut)
+            }
         }
-        return scrapedPages
+        return id
     }
 
-    private fun toAbsoluteUrl(baseUrl: String, relativeUrl: String): URI {
-        return URI(baseUrl).resolve(relativeUrl)
+    fun getLogLines(id: String): List<String> = jobs[id]?.logLines?.toList() ?: emptyList()
+
+    fun isRunning(id: String): Boolean = jobs[id]?.isRunning?.get() ?: false
+
+    fun getResultText(id: String): String? = jobs[id]?.resultText
+
+    fun getResultFilePath(id: String): String? = jobs[id]?.resultPath
+
+    fun getStatus(id: String): String = when {
+        !jobs.containsKey(id) -> "not_existing"
+        jobs[id]?.isRunning?.get() == true -> "in_progress"
+        else -> "finished"
+    }
+
+    fun forceEnd(id: String) {
+        jobs[id]?.job?.cancel()
+        jobs[id]?.isRunning?.set(false)
+        jobs[id]?.resultPath?.let { /* already saved */ } ?: run {
+            // Save whatever is available from the current scraper instance
+            jobs[id]?.scraper?.saveResults("scrape_result_${id}.txt")
+            jobs[id]?.resultPath = "scrape_result_${id}.txt"
+        }
     }
 }

@@ -58,6 +58,10 @@ class WebScraper(private val config: ScraperConfig) {
         }
     }
 
+    public fun getAllText(): String {
+        return allTextData.joinToString("\n\n")
+    }
+
     private fun shouldRetry(e: IOException): Boolean {
         val msg = e.message ?: return false
         return config.shouldUseRetry && (msg.contains("500") || msg.contains("502") || msg.contains("timed out"))

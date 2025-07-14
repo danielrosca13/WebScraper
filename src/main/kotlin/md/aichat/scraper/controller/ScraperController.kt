@@ -1,52 +1,97 @@
 package md.aichat.scraper.controller
 
-import md.aichat.scraper.dto.Job
-import md.aichat.scraper.dto.ScrapeRequest
-import md.aichat.scraper.repository.JobRepository
+import md.aichat.scraper.ScraperConfig
 import md.aichat.scraper.service.ScrapingService
-import org.springframework.http.HttpStatus
+import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
-import org.springframework.web.server.ResponseStatusException
+import org.springframework.core.io.FileSystemResource
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/scraper")
 class ScraperController(
-    private val scrapingService: ScrapingService,
-    private val jobRepository: JobRepository
+    private val scrapingService: ScrapingService = ScrapingService()
 ) {
-
-    @PostMapping("/scrape")
-    fun startScraping(@RequestBody request: ScrapeRequest): ResponseEntity<Map<String, String>> {
-        val job = Job(url = request.url)
-        jobRepository.save(job)
-        scrapingService.startScraping(job, request.maxPages)
-        return ResponseEntity.accepted().body(mapOf("jobId" to job.id))
-    }
-
-    @GetMapping("/status/{jobId}")
-    fun getJobStatus(@PathVariable jobId: String): ResponseEntity<Map<String, Any>> {
-        val job = jobRepository.findById(jobId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found")
-
-        val response = mutableMapOf<String, Any>(
-            "jobId" to job.id,
-            "status" to job.status
+    @PostMapping("/start/whole-site")
+    fun startWholeSiteScrape(
+        @RequestParam baseUrl: String,
+        @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false,
+        @RequestParam(required = false) maxVisitedLinks: Int?,
+        @RequestParam(required = false) maxDepth: Int?
+    ): String {
+        val config = ScraperConfig(
+            baseUrl = baseUrl,
+            crawlWholeSite = true,
+            maxVisitedLinks = maxVisitedLinks,
+            maxDepth = maxDepth
         )
-        job.error?.let { response["error"] = it }
-
-        return ResponseEntity.ok(response)
+        return scrapingService.startScrape(config, isReturningText)
     }
 
-    @GetMapping("/result/{jobId}")
-    fun getScrapeResult(@PathVariable jobId: String): ResponseEntity<Job> {
-        val job = jobRepository.findById(jobId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found")
+    @PostMapping("/start/product-page")
+    fun startProductPageScrape(
+        @RequestParam baseUrl: String,
+        @RequestParam productUrlPattern: String,
+        @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false,
+        @RequestParam(required = false) maxVisitedLinks: Int?,
+        @RequestParam(required = false) maxDepth: Int?
+    ): String {
+        val config = ScraperConfig(
+            baseUrl = baseUrl,
+            isPageWithProducts = true,
+            productUrlPattern = productUrlPattern,
+            maxVisitedLinks = maxVisitedLinks,
+            maxDepth = maxDepth
+        )
+        return scrapingService.startScrape(config, isReturningText)
+    }
 
-        if (job.status != md.aichat.scraper.dto.JobStatus.COMPLETED) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Job not yet completed. Status is ${job.status}")
+    @PostMapping("/start/page")
+    fun startPageScrape(
+        @RequestParam baseUrl: String,
+        @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false,
+        @RequestParam(required = false) maxVisitedLinks: Int?,
+        @RequestParam(required = false) maxDepth: Int?
+    ): String {
+        val config = ScraperConfig(
+            baseUrl = baseUrl,
+            maxVisitedLinks = maxVisitedLinks,
+            maxDepth = maxDepth
+        )
+        return scrapingService.startScrape(config, isReturningText)
+    }
+
+    @GetMapping("/logs/{id}")
+    fun getLogs(@PathVariable id: String): List<String> = scrapingService.getLogLines(id)
+
+    @PostMapping("/force-end/{id}")
+    fun forceEnd(@PathVariable id: String): String {
+        scrapingService.forceEnd(id)
+        return "Job $id force-ended and results saved."
+    }
+
+    @GetMapping("/result/{id}")
+    fun getResult(
+        @PathVariable id: String,
+        @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false
+    ): ResponseEntity<*> {
+        return if (isReturningText) {
+            val text = scrapingService.getResultText(id)
+            if (text != null) ResponseEntity.ok().contentType(MediaType.TEXT_PLAIN).body(text)
+            else ResponseEntity.notFound().build()
+        } else {
+            val filePath = scrapingService.getResultFilePath(id)
+            if (filePath != null) {
+                val resource = FileSystemResource(filePath)
+                ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${resource.filename}\"")
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(resource)
+            } else ResponseEntity.notFound().build()
         }
-
-        return ResponseEntity.ok(job)
     }
+
+    @GetMapping("/status/{id}")
+    fun getStatus(@PathVariable id: String): String = scrapingService.getStatus(id)
 }
