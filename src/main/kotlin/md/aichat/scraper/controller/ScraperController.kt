@@ -7,12 +7,14 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import org.springframework.core.io.FileSystemResource
+import org.slf4j.LoggerFactory
 
 @RestController
 @RequestMapping("/api/scraper")
 class ScraperController(
     private val scrapingService: ScrapingService = ScrapingService()
 ) {
+    private val logger = LoggerFactory.getLogger(ScraperController::class.java)
     @PostMapping("/start/whole-site")
     fun startWholeSiteScrape(
         @RequestParam baseUrl: String,
@@ -26,7 +28,9 @@ class ScraperController(
             maxVisitedLinks = maxVisitedLinks,
             maxDepth = maxDepth
         )
-        return scrapingService.startScrape(config, isReturningText)
+        val jobId = scrapingService.startScrape(config, isReturningText)
+        logger.info("[Job $jobId] Started whole-site scrape for $baseUrl")
+        return jobId
     }
 
     @PostMapping("/start/product-page")
@@ -59,14 +63,20 @@ class ScraperController(
             maxVisitedLinks = maxVisitedLinks,
             maxDepth = maxDepth
         )
-        return scrapingService.startScrape(config, isReturningText)
+        val jobId = scrapingService.startScrape(config, isReturningText)
+        logger.info("[Job $jobId] Started page scrape for $baseUrl")
+        return jobId
     }
 
     @GetMapping("/logs/{id}")
-    fun getLogs(@PathVariable id: String): List<String> = scrapingService.getLogLines(id)
+    fun getLogs(@PathVariable id: String): List<String> {
+        logger.info("[Job $id] Logs requested.")
+        return scrapingService.getLogLines(id)
+    }
 
     @PostMapping("/force-end/{id}")
     fun forceEnd(@PathVariable id: String): String {
+        logger.info("[Job $id] Force-end requested.")
         scrapingService.forceEnd(id)
         return "Job $id force-ended and results saved."
     }
@@ -76,6 +86,7 @@ class ScraperController(
         @PathVariable id: String,
         @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false
     ): ResponseEntity<*> {
+        logger.info("[Job $id] Result requested. isReturningText=$isReturningText")
         return if (isReturningText) {
             val text = scrapingService.getResultText(id)
             if (text != null) ResponseEntity.ok().contentType(MediaType.TEXT_PLAIN).body(text)
@@ -93,5 +104,8 @@ class ScraperController(
     }
 
     @GetMapping("/status/{id}")
-    fun getStatus(@PathVariable id: String): String = scrapingService.getStatus(id)
+    fun getStatus(@PathVariable id: String): String {
+        logger.info("[Job $id] Status requested.")
+        return scrapingService.getStatus(id)
+    }
 }

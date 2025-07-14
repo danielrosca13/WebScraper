@@ -3,18 +3,22 @@ package md.aichat.scraper
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import kotlinx.coroutines.*
+import org.slf4j.LoggerFactory
 import java.io.FileWriter
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.net.URL
 
-class WebScraper(private val config: ScraperConfig) {
+class WebScraper(
+    private val config: ScraperConfig,
+    private val jobId: String? = null) {
     init {
         if (config.maxVisitedLinks != null && config.maxVisitedLinks < 0) {
             throw IllegalArgumentException("maxVisitedLinks cannot be negative")
         }
     }
 
+    private val logger = LoggerFactory.getLogger(WebScraper::class.java)
     private val visitedUrls = ConcurrentHashMap.newKeySet<String>()
     private val allTextData = ConcurrentHashMap.newKeySet<String>()
 
@@ -24,7 +28,7 @@ class WebScraper(private val config: ScraperConfig) {
 
     private fun crawl(scope: CoroutineScope, url: String, depth: Int) {
         if (!shouldVisit(url, depth)) return
-        println("Crawling: $url (depth $depth)")
+        logger.info("[Job ${jobId ?: "N/A"}] Crawling: $url (depth $depth)")
         fetchAndProcess(scope, url, depth)
     }
 
@@ -48,10 +52,10 @@ class WebScraper(private val config: ScraperConfig) {
             } catch (e: IOException) {
                 attempt++
                 if (shouldRetry(e) && attempt < maxRetries) {
-                    System.err.println("Error crawling $url: ${e.message}. Retrying ($attempt/$maxRetries)...")
+                    logger.warn("[Job ${jobId ?: "N/A"}] Error crawling $url: ${e.message}. Retrying ($attempt/$maxRetries)...")
                     Thread.sleep(retryDelayMillis)
                 } else {
-                    System.err.println("Error crawling $url: ${e.message}. Giving up after $attempt attempts.")
+                    logger.error("[Job ${jobId ?: "N/A"}] Error crawling $url: ${e.message}. Giving up after $attempt attempts.")
                     break
                 }
             }
@@ -106,9 +110,9 @@ class WebScraper(private val config: ScraperConfig) {
             FileWriter(allInfoPath).use { writer ->
                 allTextData.forEach { writer.write(it + "\n\n") }
             }
-            println("All text data saved to $allInfoPath")
+            logger.info("[Job ${jobId ?: "N/A"}] All text data saved to $allInfoPath")
         } catch (e: IOException) {
-            System.err.println("Error saving results: ${e.message}")
+            logger.error("[Job ${jobId ?: "N/A"}] Error saving results: ${e.message}")
         }
     }
 }

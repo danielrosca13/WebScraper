@@ -6,8 +6,10 @@ import md.aichat.scraper.ScraperConfig
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.UUID
+import org.slf4j.LoggerFactory
 
 class ScrapingService {
+    private val logger = LoggerFactory.getLogger(ScrapingService::class.java)
     data class ScrapeJob(
         val id: String,
         val config: ScraperConfig,
@@ -27,7 +29,7 @@ class ScrapingService {
         val job = ScrapeJob(id, config, isReturningText)
         jobs[id] = job
         job.job = CoroutineScope(Dispatchers.IO).launch {
-            val scraper = WebScraper(config)
+            val scraper = WebScraper(config, id)
             job.scraper = scraper
             val logBuffer = job.logLines
             val logInterceptor = { line: String ->
@@ -38,6 +40,7 @@ class ScrapingService {
             }
             val originalOut = System.out
             try {
+                logger.info("[Job $id] Starting scrape job.")
                 // Redirect println to logInterceptor for this job
                 System.setOut(java.io.PrintStream(object : java.io.OutputStream() {
                     override fun write(b: Int) { }
@@ -47,17 +50,20 @@ class ScrapingService {
                     }
                 }))
                 scraper.scrape()
-                val resultPath = "scrape_result_${id}.txt"
+                val resultPath = "/results/scrape_result_${id}.txt"
                 scraper.saveResults(resultPath)
                 job.resultPath = resultPath
                 if (isReturningText) {
                     job.resultText = scraper.getAllText()
                 }
+                logger.info("[Job $id] Scrape job finished.")
             } catch (e: Exception) {
                 logInterceptor("Error: ${e.message}")
+                logger.error("[Job $id] Error during scrape job: ${e.message}", e)
             } finally {
                 job.isRunning.set(false)
                 System.setOut(originalOut)
+                logger.info("[Job $id] Scrape job resources cleaned up.")
             }
         }
         return id
@@ -78,6 +84,7 @@ class ScrapingService {
     }
 
     fun forceEnd(id: String) {
+        logger.info("[Job $id] Force-ending job.")
         jobs[id]?.job?.cancel()
         jobs[id]?.isRunning?.set(false)
         jobs[id]?.resultPath?.let { /* already saved */ } ?: run {
@@ -85,5 +92,6 @@ class ScrapingService {
             jobs[id]?.scraper?.saveResults("scrape_result_${id}.txt")
             jobs[id]?.resultPath = "scrape_result_${id}.txt"
         }
+        logger.info("[Job $id] Job force-ended and results saved.")
     }
 }
