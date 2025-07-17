@@ -21,14 +21,16 @@ class ScraperController(
         @RequestParam(required = false, defaultValue = "false") shouldRetry: Boolean = false,
         @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false,
         @RequestParam(required = false) maxVisitedLinks: Int?,
-        @RequestParam(required = false) maxDepth: Int?
+        @RequestParam(required = false, defaultValue = "1") maxDepth: Int?,
+        @RequestParam(required = false) productPageUrl: String?
     ): String {
         val config = ScraperConfig(
             baseUrl = baseUrl,
             crawlWholeSite = true,
             shouldUseRetry = shouldRetry,
             maxVisitedLinks = maxVisitedLinks,
-            maxDepth = maxDepth
+            maxDepth = maxDepth,
+            productPageUrl = productPageUrl
         )
         val jobId = scrapingService.startScrape(config, isReturningText)
         logger.info("[Job $jobId] Started whole-site scrape for $baseUrl")
@@ -39,6 +41,7 @@ class ScraperController(
     fun startProductPageScrape(
         @RequestParam baseUrl: String,
         @RequestParam productUrlPattern: String,
+        @RequestParam(required = false) productPageUrl: String?,
         @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false,
         @RequestParam(required = false) maxVisitedLinks: Int?,
         @RequestParam(required = false) maxDepth: Int?
@@ -48,7 +51,8 @@ class ScraperController(
             isPageWithProducts = true,
             productUrlPattern = productUrlPattern,
             maxVisitedLinks = maxVisitedLinks,
-            maxDepth = maxDepth
+            maxDepth = maxDepth,
+            productPageUrl = productPageUrl
         )
         return scrapingService.startScrape(config, isReturningText)
     }

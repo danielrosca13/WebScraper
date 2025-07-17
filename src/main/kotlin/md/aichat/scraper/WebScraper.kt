@@ -8,6 +8,7 @@ import java.io.FileWriter
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.net.URL
+import com.google.gson.GsonBuilder
 
 class WebScraper(
     private val config: ScraperConfig,
@@ -21,20 +22,25 @@ class WebScraper(
     private val logger = LoggerFactory.getLogger(WebScraper::class.java)
     private val visitedUrls = ConcurrentHashMap.newKeySet<String>()
     private val allTextData = ConcurrentHashMap.newKeySet<String>()
+    private val products = mutableListOf<Product>()
 
     suspend fun scrape() = coroutineScope {
         crawl(this, config.baseUrl, 0)
     }
 
     private fun crawl(scope: CoroutineScope, url: String, depth: Int) {
-        if (!shouldVisit(url, depth)) return
+        val urlToVerify = url.replace("asc", "").replace("desc", "")
+        if (!shouldVisit(urlToVerify, depth)) return
         logger.info("[Job ${jobId ?: "N/A"}] Crawling: $url (depth $depth)")
         fetchAndProcess(scope, url, depth)
     }
 
     private fun shouldVisit(url: String, depth: Int): Boolean {
         if (config.maxVisitedLinks != null && config.maxVisitedLinks > 0 && visitedUrls.size >= config.maxVisitedLinks) return false
-        if (!visitedUrls.add(url)) return false
+        if (!visitedUrls.add(url)) {
+            logger.info("[Job $jobId] URL already visited: $url (depth $depth)")
+            return false
+        }
         if (config.maxDepth != null && depth > config.maxDepth) return false
         return true
     }
@@ -73,12 +79,38 @@ class WebScraper(
 
     private fun processDocument(document: Document) {
         allTextData.add(DataExtractor.extractAllText(document))
+        extractProductIfMatch(document)
+    }
+
+    private fun extractProductIfMatch(document: Document) {
+        val selectors = config.productFieldSelectors ?: return
+        val name = selectors["name"]?.let { document.select(it).firstOrNull()?.text() }
+        val price = selectors["price"]?.let { document.select(it).firstOrNull()?.text() }
+        val description = selectors["description"]?.let { document.select(it).firstOrNull()?.text() }
+        val availability = selectors["availability"]?.let { document.select(it).firstOrNull()?.text() }
+        val specifications = selectors["specifications"]?.let { document.select(it).firstOrNull()?.text() }
+        val brand = selectors["brand"]?.let { document.select(it).firstOrNull()?.text() }
+        val imageRaw = selectors["main_image_link"]?.let { document.select(it).firstOrNull()?.attr("src") }
+        val image = if (imageRaw != null && imageRaw.startsWith("/")) {
+            try {
+                val base = URL(config.baseUrl)
+                "${base.protocol}://${base.host}$imageRaw"
+            } catch (e: Exception) {
+                imageRaw
+            }
+        } else {
+            imageRaw
+        }
+// Only add if at least name and price are present
+        if (!name.isNullOrBlank() && !price.isNullOrBlank()) {
+            val url = document.location()
+            products.add(Product(name, price, description, availability, specifications, brand, image, url))
+            logger.info("[Job ${jobId ?: "N/A"}] Product detected: $name, $price, $url")
+        }
     }
 
     private fun launchLinks(scope: CoroutineScope, document: Document, depth: Int) {
         val links = document.select("a[href]")
-        val baseUrlObj = URL(config.baseUrl)
-        val baseProtocolHost = "${'$'}{baseUrlObj.protocol}://${'$'}{baseUrlObj.host}"
         for (link in links) {
             val absLink = link.absUrl("href")
             if (absLink.isEmpty() || !isValidResource(absLink)) continue
@@ -92,7 +124,7 @@ class WebScraper(
 
     private fun shouldFollowLink(absLink: String): Boolean {
         val matchesProductPattern = config.productUrlPattern != null && absLink.contains(config.productUrlPattern)
-        val isSameDomain = absLink.startsWith(config.baseUrl) || (try { URL(absLink).host == URL(config.baseUrl).host } catch (e: Exception) { false })
+        val isSameDomain = absLink.startsWith(config.baseUrl) || !config.crawlWholeSite && (try { URL(absLink).host == URL(config.baseUrl).host } catch (e: Exception) { false })
         return when {
             config.crawlWholeSite -> isSameDomain
             config.isPageWithProducts -> absLink.startsWith(config.baseUrl) || matchesProductPattern
@@ -117,6 +149,18 @@ class WebScraper(
                 allTextData.forEach { writer.write(it + "\n\n") }
             }
             logger.info("[Job ${jobId ?: "N/A"}] All text data saved to $allInfoPath")
+            // Save products as JSON
+            if (products.isNotEmpty() && jobId != null) {
+                val productsFile = java.io.File("./results/$jobId/products_$jobId.json")
+                productsFile.parentFile?.let { parent ->
+                    if (!parent.exists()) parent.mkdirs()
+                }
+                val gson = GsonBuilder().setPrettyPrinting().create()
+                FileWriter(productsFile).use { writer ->
+                    writer.write(gson.toJson(products))
+                }
+                logger.info("[Job $jobId] Products saved to ./results/$jobId/products_$jobId.json")
+            }
         } catch (e: IOException) {
             logger.error("[Job ${jobId ?: "N/A"}] Error saving results: ${e.message}")
         }

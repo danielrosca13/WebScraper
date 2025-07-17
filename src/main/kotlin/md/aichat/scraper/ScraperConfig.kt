@@ -11,4 +11,6 @@ data class ScraperConfig(
     val crawlWholeSite: Boolean = false,
     val maxVisitedLinks: Int? = null,
     val maxDepth: Int? = null,
+    val productPageUrl: String? = null,
+    val productFieldSelectors: Map<String, String>? = null,
 )
