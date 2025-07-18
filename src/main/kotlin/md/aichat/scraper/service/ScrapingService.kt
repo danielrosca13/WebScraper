@@ -10,9 +10,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.UUID
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+import org.springframework.beans.factory.annotation.Value
 
 class ScrapingService {
     private val logger = LoggerFactory.getLogger(ScrapingService::class.java)
+    @Value("\${chatgpt.api.key}")
+    private lateinit var apiKey: String
+    @Value("\${chatgpt.base.url}")
+    private lateinit var baseUrl: String
     data class ScrapeJob(
         val id: String,
         val config: ScraperConfig,
@@ -73,7 +78,6 @@ class ScrapingService {
     }
 
     private fun getProductSelectorsFromOpenAI(html: String): Map<String, String> {
-        val apiKey = ""
         val prompt = """
             You are extracting product data from an e-commerce product page HTML. Based on the HTML I give you, return a valid JSON object with the following fields as keys:
             
@@ -125,7 +129,7 @@ class ScrapingService {
             .readTimeout(100, java.util.concurrent.TimeUnit.SECONDS)
             .build()
         val request = okhttp3.Request.Builder()
-            .url("https://api.openai.com/v1/chat/completions")
+            .url(baseUrl)
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
             .post(okhttp3.RequestBody.create("application/json".toMediaTypeOrNull(), requestBody))
