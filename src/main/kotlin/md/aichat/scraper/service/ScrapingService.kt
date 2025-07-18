@@ -11,13 +11,17 @@ import java.util.UUID
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Service
 
+@Service
 class ScrapingService {
     private val logger = LoggerFactory.getLogger(ScrapingService::class.java)
     @Value("\${chatgpt.api.key}")
     private lateinit var apiKey: String
     @Value("\${chatgpt.base.url}")
     private lateinit var baseUrl: String
+    @Value("\${scraper.results.dir}")
+    private lateinit var scraperResultPath: String
     data class ScrapeJob(
         val id: String,
         val config: ScraperConfig,
@@ -25,6 +29,8 @@ class ScrapingService {
         val isRunning: AtomicBoolean = AtomicBoolean(true),
         var resultPath: String? = null,
         var resultText: String? = null,
+        var productPath: String? = null,
+        var products: String? = null,
         var job: Job? = null,
         var scraper: WebScraper? = null
     )
@@ -38,8 +44,8 @@ class ScrapingService {
         if (config.productPageUrl != null) {
             try {
                 val html = fetchHtml(config.productPageUrl)
-                selectors = getProductSelectorsFromOpenAI(html)
-                logger.info("[Job $id] Product selectors from OpenAI: $selectors")
+                selectors = getProductSelectorsFromOpenAI(id, html)
+                logger.debug("[Job $id] Product selectors from OpenAI: $selectors")
             } catch (e: Exception) {
                 logger.error("[Job $id] Error getting product selectors from OpenAI: ${e.message}", e)
             }
@@ -54,11 +60,14 @@ class ScrapingService {
             try {
                 logger.info("[Job $id] Starting scrape job.")
                 scraper.scrape()
-                val resultPath = "./results/${id}/scrape_result_${id}.txt"
-                scraper.saveResults(resultPath)
+                val resultPath = "$scraperResultPath/${id}/scrape_result_${id}.txt"
+                val productPath = "$scraperResultPath/${id}/products_${id}.json"
+                scraper.saveResults(resultPath, productPath)
                 job.resultPath = resultPath
+                job.productPath = productPath
                 if (isReturningText) {
                     job.resultText = scraper.getAllText()
+                    job.products = scraper.getProductsAsJson()
                 }
                 logger.info("[Job $id] Scrape job finished.")
             } catch (e: Exception) {
@@ -77,7 +86,7 @@ class ScrapingService {
         return org.jsoup.Jsoup.connect(url).timeout(100_000).get().body().toString()
     }
 
-    private fun getProductSelectorsFromOpenAI(html: String): Map<String, String> {
+    private fun getProductSelectorsFromOpenAI(jobId: String, html: String): Map<String, String> {
         val prompt = """
             You are extracting product data from an e-commerce product page HTML. Based on the HTML I give you, return a valid JSON object with the following fields as keys:
             
@@ -134,6 +143,7 @@ class ScrapingService {
             .addHeader("Content-Type", "application/json")
             .post(okhttp3.RequestBody.create("application/json".toMediaTypeOrNull(), requestBody))
             .build()
+        logger.info("[$jobId] Sending request to OpenAI API for product selectors.")
         val response = client.newCall(request).execute()
         if (!response.isSuccessful) throw Exception("OpenAI API error: ${response.code} ${response.message}")
         val responseBody = response.body?.string() ?: throw Exception("No response from OpenAI")
@@ -150,6 +160,7 @@ class ScrapingService {
         if (jsonStart == -1 || jsonEnd == -1) throw Exception("No JSON found in OpenAI response")
         val jsonString = sanitizeJsonString(content.substring(jsonStart, jsonEnd + 1))
         val selectorsJson = org.json.JSONObject(jsonString)
+        logger.debug("[$jobId] Extracted selectors JSON: $selectorsJson")
         val selectors = mutableMapOf<String, String>()
         for (key in selectorsJson.keys()) {
             selectors[key] = selectorsJson.getJSONObject(key).getString("selector")
@@ -210,6 +221,10 @@ class ScrapingService {
 
     fun getResultFilePath(id: String): String? = jobs[id]?.resultPath
 
+    fun getProductsText(id: String): String? = jobs[id]?.products
+
+    fun getProductsFilePath(id: String): String? = jobs[id]?.productPath
+
     fun getStatus(id: String): String = when {
         !jobs.containsKey(id) -> "not_existing"
         jobs[id]?.isRunning?.get() == true -> "in_progress"
@@ -222,8 +237,8 @@ class ScrapingService {
         jobs[id]?.isRunning?.set(false)
         jobs[id]?.resultPath?.let { /* already saved */ } ?: run {
             // Save whatever is available from the current scraper instance
-            jobs[id]?.scraper?.saveResults("./results/${id}/scrape_result_${id}.txt")
-            jobs[id]?.resultPath = "./results/${id}/scrape_result_${id}.txt"
+            jobs[id]?.scraper?.saveResults("$scraperResultPath/${id}/scrape_result_${id}.txt", "$scraperResultPath/${id}/products_${id}.json")
+            jobs[id]?.resultPath = "$scraperResultPath/${id}/scrape_result_${id}.txt"
         }
         logger.info("[Job $id] Job force-ended and results saved.")
     }

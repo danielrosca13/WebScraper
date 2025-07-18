@@ -31,14 +31,14 @@ class WebScraper(
     private fun crawl(scope: CoroutineScope, url: String, depth: Int) {
         val urlToVerify = url.replace("asc", "").replace("desc", "")
         if (!shouldVisit(urlToVerify, depth)) return
-        logger.info("[Job ${jobId ?: "N/A"}] Crawling: $url (depth $depth)")
+        logger.debug("[Job ${jobId ?: "N/A"}] Crawling: $url (depth $depth)")
         fetchAndProcess(scope, url, depth)
     }
 
     private fun shouldVisit(url: String, depth: Int): Boolean {
         if (config.maxVisitedLinks != null && config.maxVisitedLinks > 0 && visitedUrls.size >= config.maxVisitedLinks) return false
         if (!visitedUrls.add(url)) {
-            logger.info("[Job $jobId] URL already visited: $url (depth $depth)")
+            logger.debug("[Job $jobId] URL already visited: $url (depth $depth)")
             return false
         }
         if (config.maxDepth != null && depth > config.maxDepth) return false
@@ -70,6 +70,11 @@ class WebScraper(
 
     public fun getAllText(): String {
         return allTextData.joinToString("\n\n")
+    }
+
+    public fun getProductsAsJson(): String {
+        val gson = GsonBuilder().setPrettyPrinting().create()
+        return gson.toJson(products)
     }
 
     private fun shouldRetry(e: IOException): Boolean {
@@ -137,7 +142,7 @@ class WebScraper(
         return !(lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".mp3") || lower.endsWith(".mp4"))
     }
 
-    fun saveResults(allInfoPath: String) {
+    fun saveResults(allInfoPath: String, productsPath: String) {
         try {
             val file = java.io.File(allInfoPath)
             file.parentFile?.let { parent ->
@@ -151,7 +156,7 @@ class WebScraper(
             logger.info("[Job ${jobId ?: "N/A"}] All text data saved to $allInfoPath")
             // Save products as JSON
             if (products.isNotEmpty() && jobId != null) {
-                val productsFile = java.io.File("./results/$jobId/products_$jobId.json")
+                val productsFile = java.io.File(productsPath)
                 productsFile.parentFile?.let { parent ->
                     if (!parent.exists()) parent.mkdirs()
                 }
@@ -159,7 +164,7 @@ class WebScraper(
                 FileWriter(productsFile).use { writer ->
                     writer.write(gson.toJson(products))
                 }
-                logger.info("[Job $jobId] Products saved to ./results/$jobId/products_$jobId.json")
+                logger.info("[Job $jobId] Products saved to $productsPath")
             }
         } catch (e: IOException) {
             logger.error("[Job ${jobId ?: "N/A"}] Error saving results: ${e.message}")

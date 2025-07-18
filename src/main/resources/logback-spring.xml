@@ -1,13 +1,19 @@
 <configuration>
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>${LOG_LEVEL_CONSOLE:-INFO}</level>
+        </filter>
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %highlight(%msg) %n</pattern>
         </encoder>
     </appender>
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/webscraper.log</file>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>${LOG_LEVEL_FILE:-DEBUG}</level>
+        </filter>
+        <file>${LOGS_DIR:-logs}/webscraper.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/webscraper.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>${LOGS_DIR:-logs}/webscraper.%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>7</maxHistory>
         </rollingPolicy>
         <encoder>
@@ -15,7 +21,7 @@
         </encoder>
     </appender>
     <appender name="JOBBUFFER" class="md.aichat.scraper.config.JobBufferLogAppender"/>
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
         <appender-ref ref="JOBBUFFER"/>

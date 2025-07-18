@@ -12,25 +12,25 @@ import org.slf4j.LoggerFactory
 @RestController
 @RequestMapping("/api/scraper")
 class ScraperController(
-    private val scrapingService: ScrapingService = ScrapingService()
+    private val scrapingService: ScrapingService
 ) {
     private val logger = LoggerFactory.getLogger(ScraperController::class.java)
     @PostMapping("/start/whole-site")
     fun startWholeSiteScrape(
         @RequestParam baseUrl: String,
         @RequestParam(required = false, defaultValue = "false") shouldRetry: Boolean = false,
+        @RequestParam(required = false) productPageUrl: String?,
         @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false,
         @RequestParam(required = false) maxVisitedLinks: Int?,
-        @RequestParam(required = false, defaultValue = "1") maxDepth: Int?,
-        @RequestParam(required = false) productPageUrl: String?
+        @RequestParam(required = false, defaultValue = "1") maxDepth: Int?
     ): String {
         val config = ScraperConfig(
             baseUrl = baseUrl,
+            productPageUrl = productPageUrl,
             crawlWholeSite = true,
             shouldUseRetry = shouldRetry,
             maxVisitedLinks = maxVisitedLinks,
-            maxDepth = maxDepth,
-            productPageUrl = productPageUrl
+            maxDepth = maxDepth
         )
         val jobId = scrapingService.startScrape(config, isReturningText)
         logger.info("[Job $jobId] Started whole-site scrape for $baseUrl")
@@ -87,8 +87,8 @@ class ScraperController(
         return "Job $id force-ended and results saved."
     }
 
-    @GetMapping("/result/{id}")
-    fun getResult(
+    @GetMapping("/result/all-text/{id}")
+    fun getAllText(
         @PathVariable id: String,
         @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false
     ): ResponseEntity<*> {
@@ -99,6 +99,28 @@ class ScraperController(
             else ResponseEntity.notFound().build()
         } else {
             val filePath = scrapingService.getResultFilePath(id)
+            if (filePath != null) {
+                val resource = FileSystemResource(filePath)
+                ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${resource.filename}\"")
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(resource)
+            } else ResponseEntity.notFound().build()
+        }
+    }
+
+    @GetMapping("/result/all-products/{id}")
+    fun getAllProducts(
+        @PathVariable id: String,
+        @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false
+    ): ResponseEntity<*> {
+        logger.info("[Job $id] Products requested. isReturningText=$isReturningText")
+        return if (isReturningText) {
+            val text = scrapingService.getProductsText(id)
+            if (text != null) ResponseEntity.ok().contentType(MediaType.TEXT_PLAIN).body(text)
+            else ResponseEntity.notFound().build()
+        } else {
+            val filePath = scrapingService.getProductsFilePath(id)
             if (filePath != null) {
                 val resource = FileSystemResource(filePath)
                 ResponseEntity.ok()
