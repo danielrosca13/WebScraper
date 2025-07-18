@@ -50,26 +50,24 @@ API_KEY=your-api-key
 ```
 
 ### Environment Variable Explanations
-| Variable                | Description                                                                 | Used In                        |
-|-------------------------|-----------------------------------------------------------------------------|--------------------------------|
-| `APP_SERVER_BACKEND_URL`| Backend server URL (used for internal API calls)                            | application.properties         |
-| `APP_SERVER_URL`        | Public server URL (used for external access)                                | application.properties         |
-| `SPRING_APPLICATION_NAME`| Spring Boot application name                                               | application.properties         |
-| `CHATGPT_API_KEY`       | OpenAI API key for ChatGPT integration                                      | application.properties         |
-| `CHATGPT_BASE_URL`      | Base URL for ChatGPT API                                                    | application.properties         |
-| `SWAGGER_USERNAME`      | Username for Swagger UI authentication                                      | application.properties         |
-| `SWAGGER_PASSWORD`      | Password for Swagger UI authentication                                      | application.properties         |
-| `DATABASE_PORT`         | PostgreSQL port                                                             | docker-compose, dev.env        |
-| `DATABASE_URL`          | JDBC URL for PostgreSQL connection                                          | application.properties         |
-| `DATABASE_USERNAME`     | PostgreSQL username                                                         | application.properties, docker |
-| `DATABASE_PASSWORD`     | PostgreSQL password                                                         | application.properties, docker |
-| `SHOW_SQL_IN_LOGS`      | Show SQL statements in logs (true/false)                                    | application.properties         |
-| `SCRAPER_RESULTS_DIR`   | Directory to store scraping results                                         | application.properties         |
-| `LOGS_DIR`              | Directory to store log files                                                | application.properties         |
-| `LOG_LEVEL_CONSOLE`     | Log level for console output (e.g., INFO, DEBUG)                            | application.properties         |
-| `LOG_LEVEL_FILE`        | Log level for file output (e.g., INFO, DEBUG)                               | application.properties         |
-| `SERVER_PORT`           | Port for the web application                                                | application.properties, docker |
-| `API_KEY`               | API key for authenticating requests                                         | application.properties         |
+| Variable                | Description                                                                 | Used In                                 |
+|-------------------------|-----------------------------------------------------------------------------|-----------------------------------------|
+| `APP_SERVER_BACKEND_URL`| Backend server URL (used for internal API calls)                            | application.properties                  |
+| `APP_SERVER_URL`        | Public server URL (used for external access)                                | application.properties                  |
+| `SPRING_APPLICATION_NAME`| Spring Boot application name                                               | application.properties                  |
+| `CHATGPT_API_KEY`       | OpenAI API key for ChatGPT integration                                      | application.properties                  |
+| `CHATGPT_BASE_URL`      | Base URL for ChatGPT API                                                    | application.properties                  |
+| `SWAGGER_USERNAME`      | Username for Swagger UI authentication                                      | application.properties                  |
+| `SWAGGER_PASSWORD`      | Password for Swagger UI authentication                                      | application.properties                  |
+| `DATABASE_PORT`         | PostgreSQL port                                                             | docker-compose, dev.env                 |
+| `DATABASE_URL`          | JDBC URL for PostgreSQL connection                                          | application.properties                  |
+| `DATABASE_USERNAME`     | PostgreSQL username                                                         | application.properties, docker          |
+| `DATABASE_PASSWORD`     | PostgreSQL password                                                         | application.properties, docker          |
+| `SHOW_SQL_IN_LOGS`      | Show SQL statements in logs (true/false)                                    | application.properties                  |
+| `SCRAPER_RESULTS_DIR`   | Directory to store scraping results                                         | application.properties                  |
+| `LOGS_DIR`              | Directory to store log files                                                | application.properties                  |
+| `LOG_LEVEL_CONSOLE`     | Log level for console output (e.g., INFO, DEBUG)                            | application.properties, logback-spring.xml|
+| `LOG_LEVEL_FILE`        | Log level for file output (e.g., INFO, DEBUG)                               | application.properties, logback-spring.xml|
 
 ---
 
@@ -82,7 +80,7 @@ API_KEY=your-api-key
    ```
 
 2. **Set up the environment**
-   - Copy `dev.env` to the project root (edit values as needed).
+   - Copy or create `dev.env` to the project root (edit values as needed).
    - Ensure PostgreSQL is running locally and matches the credentials in `dev.env`.
 
 3. **Build the project**
@@ -147,6 +145,8 @@ Also you can run the application from Intellij IDEA (recommended).
 ---
 
 ## Notes
+- Take into account that you can test the application locally using swagger UI at `http://localhost:<SERVER_PORT>/swagger-ui.html` (default port is 7070).
+- The application uses PostgreSQL as the database, and it is configured to run in a Docker container.
 - Please take into account that if you are on MacOS or Linux, you may just use the path as usal, but if you are on Windows, you may need to use a path like `C:/path/to/results` or `D:/path/to/logs` if you want the logs locally, while for the Docker you will have to use paths like for Linux.
 - The `SCRAPER_RESULTS_DIR` and `LOGS_DIR` directories must exist and be writable by the application (especially when running locally).
 - The application expects a valid OpenAI API key for ChatGPT integration.
