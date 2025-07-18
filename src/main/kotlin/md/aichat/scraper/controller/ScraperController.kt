@@ -9,12 +9,29 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.core.io.FileSystemResource
 import org.slf4j.LoggerFactory
 
+/**
+ * REST controller for managing scraping jobs and retrieving results.
+ *
+ * Exposes endpoints to start different types of scraping jobs, fetch logs, results, and job status.
+ */
 @RestController
 @RequestMapping("/api/scraper")
 class ScraperController(
     private val scrapingService: ScrapingService
 ) {
     private val logger = LoggerFactory.getLogger(ScraperController::class.java)
+
+    /**
+     * Starts a whole-site scraping job.
+     *
+     * @param baseUrl The base URL to start crawling from.
+     * @param shouldRetry Whether to retry on transient errors.
+     * @param productPageUrl Optional product page URL for selector extraction.
+     * @param isReturningText Whether to return results as text.
+     * @param maxVisitedLinks Maximum number of links to visit.
+     * @param maxDepth Maximum crawl depth.
+     * @return The job ID for tracking.
+     */
     @PostMapping("/start/whole-site")
     fun startWholeSiteScrape(
         @RequestParam baseUrl: String,

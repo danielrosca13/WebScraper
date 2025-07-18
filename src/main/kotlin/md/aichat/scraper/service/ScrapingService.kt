@@ -13,6 +13,11 @@ import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 
+/**
+ * Service responsible for managing scraping jobs, including starting, tracking, and force-ending jobs.
+ *
+ * This service coordinates the lifecycle of scraping jobs, interacts with the WebScraper, and integrates with OpenAI for product selector extraction.
+ */
 @Service
 class ScrapingService {
     private val logger = LoggerFactory.getLogger(ScrapingService::class.java)
@@ -22,6 +27,10 @@ class ScrapingService {
     private lateinit var baseUrl: String
     @Value("\${scraper.results.dir}")
     private lateinit var scraperResultPath: String
+
+    /**
+     * Data class representing a single scraping job and its state.
+     */
     data class ScrapeJob(
         val id: String,
         val config: ScraperConfig,
@@ -35,8 +44,17 @@ class ScrapingService {
         var scraper: WebScraper? = null
     )
 
+    // Map of job IDs to their ScrapeJob state
     private val jobs = ConcurrentHashMap<String, ScrapeJob>()
 
+    /**
+     * Starts a new scraping job with the given configuration.
+     * If a product page URL is provided, attempts to extract product selectors using OpenAI.
+     *
+     * @param config The configuration for the scraping job.
+     * @param isReturningText Whether to return results as text instead of files.
+     * @return The job ID for tracking.
+     */
     fun startScrape(config: ScraperConfig, isReturningText: Boolean): String {
         val id = UUID.randomUUID().toString()
         var selectors: Map<String, String>? = null
@@ -53,6 +71,7 @@ class ScrapingService {
         val configWithSelectors = config.copy(productFieldSelectors = selectors)
         val job = ScrapeJob(id, configWithSelectors, isReturningText)
         jobs[id] = job
+        // Launch the scraping job in a coroutine for concurrency
         job.job = CoroutineScope(Dispatchers.IO).launch {
             MDC.put("jobId", id)
             val scraper = WebScraper(configWithSelectors, id)
