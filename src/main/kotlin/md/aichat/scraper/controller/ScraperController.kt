@@ -87,7 +87,7 @@ class ScraperController(
         return "Job $id force-ended and results saved."
     }
 
-    @GetMapping("/result/all-text/{id}")
+    @GetMapping("/result/all-text/{id}", produces = ["text/plain; charset=UTF-8"])
     fun getAllText(
         @PathVariable id: String,
         @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false
@@ -95,7 +95,7 @@ class ScraperController(
         logger.info("[Job $id] Result requested. isReturningText=$isReturningText")
         return if (isReturningText) {
             val text = scrapingService.getResultText(id)
-            if (text != null) ResponseEntity.ok().contentType(MediaType.TEXT_PLAIN).body(text)
+            if (text != null) ResponseEntity.ok().contentType(MediaType.valueOf("text/plain; charset=UTF-8")).body(text)
             else ResponseEntity.notFound().build()
         } else {
             val filePath = scrapingService.getResultFilePath(id)
@@ -103,13 +103,13 @@ class ScraperController(
                 val resource = FileSystemResource(filePath)
                 ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${resource.filename}\"")
-                    .contentType(MediaType.TEXT_PLAIN)
+                    .contentType(MediaType.valueOf("text/plain; charset=UTF-8"))
                     .body(resource)
             } else ResponseEntity.notFound().build()
         }
     }
 
-    @GetMapping("/result/all-products/{id}")
+    @GetMapping("/result/all-products/{id}", produces = ["application/json; charset=UTF-8"])
     fun getAllProducts(
         @PathVariable id: String,
         @RequestParam(required = false, defaultValue = "false") isReturningText: Boolean = false
@@ -117,7 +117,7 @@ class ScraperController(
         logger.info("[Job $id] Products requested. isReturningText=$isReturningText")
         return if (isReturningText) {
             val text = scrapingService.getProductsText(id)
-            if (text != null) ResponseEntity.ok().contentType(MediaType.TEXT_PLAIN).body(text)
+            if (text != null) ResponseEntity.ok().contentType(MediaType.valueOf("application/json; charset=UTF-8")).body(text)
             else ResponseEntity.notFound().build()
         } else {
             val filePath = scrapingService.getProductsFilePath(id)
@@ -125,7 +125,7 @@ class ScraperController(
                 val resource = FileSystemResource(filePath)
                 ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"${resource.filename}\"")
-                    .contentType(MediaType.TEXT_PLAIN)
+                    .contentType(MediaType.valueOf("application/json; charset=UTF-8"))
                     .body(resource)
             } else ResponseEntity.notFound().build()
         }

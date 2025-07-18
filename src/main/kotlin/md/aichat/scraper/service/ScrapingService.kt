@@ -141,7 +141,7 @@ class ScrapingService {
             .url(baseUrl)
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
-            .post(okhttp3.RequestBody.create("application/json".toMediaTypeOrNull(), requestBody))
+            .post(okhttp3.RequestBody.create("application/json; charset=utf-8".toMediaTypeOrNull(), requestBody))
             .build()
         logger.info("[$jobId] Sending request to OpenAI API for product selectors.")
         val response = client.newCall(request).execute()
