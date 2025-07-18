@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:16
+    restart: always
+    env_file:
+      - ./dev.env
+    environment:
+      POSTGRES_DB: webscraper
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    ports:
+      - "${DATABASE_PORT}:${DATABASE_PORT}"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U myuser -d mydatabase" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - webscraper-net
+
+  webscraper:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./dev.env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:${DATABASE_PORT}/webscraper
+      SPRING_DATASOURCE_USERNAME: ${DATABASE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${DATABASE_PASSWORD}
+      SPRING_APPLICATION_NAME: ${SPRING_APPLICATION_NAME}
+      CHATGPT_API_KEY: ${CHATGPT_API_KEY}
+      CHATGPT_BASE_URL: ${CHATGPT_BASE_URL}
+      SWAGGER_USERNAME: ${SWAGGER_USERNAME}
+      SWAGGER_PASSWORD: ${SWAGGER_PASSWORD}
+      APP_SERVER_URL: ${APP_SERVER_URL}
+      APP_SERVER_BACKEND_URL: ${APP_SERVER_BACKEND_URL}
+      SHOW_SQL_IN_LOGS: ${SHOW_SQL_IN_LOGS}
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}"
+    networks:
+      - webscraper-net
+
+volumes:
+  db_data:
+
+networks:
+  webscraper-net:

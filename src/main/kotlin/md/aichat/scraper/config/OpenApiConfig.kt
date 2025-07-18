@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration
 import org.slf4j.LoggerFactory
 
 @Configuration
-class OpenApiConfig {
+open class OpenApiConfig {
     private val logger = LoggerFactory.getLogger(OpenApiConfig::class.java)
 
     @Value("\${app.server.url:http://localhost:8080}")
@@ -18,7 +18,7 @@ class OpenApiConfig {
     lateinit var backendServerUrl: String
     
     @Bean
-    fun customOpenAPI(): OpenAPI {
+    open fun customOpenAPI(): OpenAPI {
         logger.info("Configuring OpenAPI with serverUrl={} and backendServerUrl={}", serverUrl, backendServerUrl)
         return OpenAPI()
             .servers(listOf(

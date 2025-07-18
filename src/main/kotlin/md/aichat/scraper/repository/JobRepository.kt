@@ -5,7 +5,7 @@ import org.springframework.stereotype.Repository
 import java.util.concurrent.ConcurrentHashMap
 
 @Repository
-class JobRepository {
+open class JobRepository {
     private val jobs = ConcurrentHashMap<String, Job>()
 
     fun findById(id: String): Job? = jobs[id]

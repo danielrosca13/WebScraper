@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
 
 @Configuration
 @EnableWebMvc
-class WebConfig : WebMvcConfigurer {
+open class WebConfig : WebMvcConfigurer {
     private val logger = LoggerFactory.getLogger(WebConfig::class.java)
 
     @Value("\${app.server.url:http://localhost:8080}")
@@ -30,7 +30,7 @@ class WebConfig : WebMvcConfigurer {
     }
 
     @Bean
-    fun apiKeyAuthFilterRegistration(apiKeyAuthFilter: ApiKeyAuthFilter): FilterRegistrationBean<ApiKeyAuthFilter> {
+    open fun apiKeyAuthFilterRegistration(apiKeyAuthFilter: ApiKeyAuthFilter): FilterRegistrationBean<ApiKeyAuthFilter> {
         logger.info("Registering ApiKeyAuthFilter with order 1 for all URL patterns.")
         val registration = FilterRegistrationBean<ApiKeyAuthFilter>()
         registration.filter = apiKeyAuthFilter
