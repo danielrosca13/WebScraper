@@ -13,7 +13,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U myuser -d mydatabase" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME} -d webscraper" ]
       interval: 5s
       timeout: 5s
       retries: 5
