@@ -111,7 +111,7 @@ Also you can run the application from Intellij IDEA (recommended).
 
 3. **Start the services**
    ```sh
-    docker-compose --env-file ./dev.env up -d --build
+    docker-compose --env-file ./.env up -d --build
    ```
    Please ensure that the `dev.env` file is in the project root directory. The `docker-compose.yml` file will use this environment file to configure the services.
    This will start both the PostgreSQL database and the WebScraper application.

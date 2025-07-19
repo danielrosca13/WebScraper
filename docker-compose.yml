@@ -2,8 +2,6 @@ services:
   db:
     image: postgres:16
     restart: always
-    env_file:
-      - ./dev.env
     environment:
       POSTGRES_DB: webscraper
       POSTGRES_USER: ${DATABASE_USERNAME}
@@ -25,8 +23,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    env_file:
-      - ./dev.env
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:${DATABASE_PORT}/webscraper
       SPRING_DATASOURCE_USERNAME: ${DATABASE_USERNAME}
